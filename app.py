@@ -1,43 +1,41 @@
-import os
-import subprocess
-import sys
-
-# Funkcja wymuszająca instalację bibliotek, jeśli ich brakuje
-def install_packages():
-    try:
-        import nfl_data_py
-        import plotly
-    except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "nfl_data_py", "plotly", "pandas"])
-
-# Uruchom instalację przed importami
-install_packages()
-
-# Teraz standardowe importy
 import streamlit as st
 import nfl_data_py as nfl
 import pandas as pd
 import plotly.express as px
 
-st.title("🏈 NFL Analytics Pro")
+st.set_page_config(page_title="NFL Analytics Lite", layout="wide")
 
-# Pobieranie danych (tylko 1 sezon na testy)
+st.title("🏈 NFL Analytics - Sezon 2024")
+
+# Funkcja ładowania lżejszych danych (statystyki sezonowe zamiast play-by-play)
 @st.cache_data
-def load_data():
-    seasons = [2024]
-    with st.spinner("Pobieranie danych z serwerów NFL... Proszę czekać."):
-        pbp = nfl.import_pbp_data(seasons)
-    return pbp
+def load_seasonal_data():
+    # Pobieramy gotowe statystyki graczy/drużyn - to zajmuje kilka sekund i mało RAM
+    data = nfl.import_seasonal_data()
+    return data
 
 try:
-    data = load_data()
-    st.success("Dane załadowane pomyślnie!")
-    st.write(f"Liczba przeanalizowanych akcji: {len(data)}")
+    with st.spinner("Ładowanie statystyk..."):
+        df = load_seasonal_data()
     
-    # Prosty wykres na start
-    offense = data.groupby('posteam')['epa'].mean().reset_index()
-    fig = px.bar(offense, x='posteam', y='epa', title="Efektywność Ataku (EPA) 2024")
-    st.plotly_chart(fig)
+    # Filtrujemy tylko ostatni sezon
+    df_2024 = df[df['season'] == 2024].copy()
+    
+    st.success("Statystyki załadowane!")
+
+    # --- WIZUALIZACJA: TOP 10 QB wg TD ---
+    st.subheader("Top 10 Quarterbacków (Podania TD)")
+    top_qbs = df_2024.sort_values(by='passing_tds', ascending=False).head(10)
+    
+    fig = px.bar(top_qbs, x='player_name', y='passing_tds', 
+                 color='passing_tds', title="Liderzy TD - Sezon 2024")
+    st.plotly_chart(fig, use_container_width=True)
+
+    # --- TABELA DANYCH ---
+    st.subheader("Przeglądaj dane zawodników")
+    st.dataframe(df_2024[['player_name', 'recent_team', 'passing_yards', 'passing_tds', 'rushing_yards']].head(50))
 
 except Exception as e:
-    st.error(f"Wystąpił problem z danymi: {e}")
+    st.error(f"Problem z serwerem danych: {e}")
+    st.info("Spróbuj odświeżyć stronę za chwilę.")
+
