@@ -1,41 +1,33 @@
 import streamlit as st
-import nfl_data_py as nfl
 import pandas as pd
-import plotly.express as px
 
-st.set_page_config(page_title="NFL Analytics Lite", layout="wide")
-
-st.title("🏈 NFL Analytics - Sezon 2024")
-
-# Funkcja ładowania lżejszych danych (statystyki sezonowe zamiast play-by-play)
-@st.cache_data
-def load_seasonal_data():
-    # Pobieramy gotowe statystyki graczy/drużyn - to zajmuje kilka sekund i mało RAM
-    data = nfl.import_seasonal_data()
-    return data
-
+# Najpierw sprawdzamy, czy biblioteka w ogóle jest dostępna
 try:
-    with st.spinner("Ładowanie statystyk..."):
-        df = load_seasonal_data()
+    import nfl_data_py as nfl
+    import plotly.express as px
+    library_status = True
+except ImportError:
+    library_status = False
+
+st.title("🏈 NFL Analytics - Status Systemu")
+
+if not library_status:
+    st.error("Biblioteka 'nfl_data_py' nie została jeszcze zainstalowana. Proszę czekać na zakończenie 'Pieczenia ciasta' (Logs).")
+else:
+    st.success("Wszystkie biblioteki załadowane!")
     
-    # Filtrujemy tylko ostatni sezon
-    df_2024 = df[df['season'] == 2024].copy()
-    
-    st.success("Statystyki załadowane!")
+    @st.cache_data
+    def simple_load():
+        # Pobieramy tylko mały zestaw danych na test (statystyki sezonowe)
+        return nfl.import_seasonal_data()
 
-    # --- WIZUALIZACJA: TOP 10 QB wg TD ---
-    st.subheader("Top 10 Quarterbacków (Podania TD)")
-    top_qbs = df_2024.sort_values(by='passing_tds', ascending=False).head(10)
-    
-    fig = px.bar(top_qbs, x='player_name', y='passing_tds', 
-                 color='passing_tds', title="Liderzy TD - Sezon 2024")
-    st.plotly_chart(fig, use_container_width=True)
-
-    # --- TABELA DANYCH ---
-    st.subheader("Przeglądaj dane zawodników")
-    st.dataframe(df_2024[['player_name', 'recent_team', 'passing_yards', 'passing_tds', 'rushing_yards']].head(50))
-
-except Exception as e:
-    st.error(f"Problem z serwerem danych: {e}")
-    st.info("Spróbuj odświeżyć stronę za chwilę.")
-
+    try:
+        df = simple_load()
+        st.write(f"Połączono z bazą NFL! Znaleziono {len(df)} rekordów.")
+        
+        # Szybki wykres liderów jardów
+        top_yards = df[df['season'] == 2024].sort_values('passing_yards', ascending=False).head(10)
+        fig = px.bar(top_yards, x='player_name', y='passing_yards', title="Liderzy Jardów 2024")
+        st.plotly_chart(fig)
+    except Exception as e:
+        st.warning(f"Czekam na dane z serwera NFL... ({e})")
